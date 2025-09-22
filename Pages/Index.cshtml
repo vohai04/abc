@@ -1,0 +1,727 @@
+﻿@page
+
+@model BookInfoFinder.Pages.IndexModel
+
+@using BookInfoFinder.Models
+
+@{
+
+    ViewData["Title"] = "Tra cứu sách";
+
+}
+
+<link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+
+<link rel="stylesheet" href="~/css/index.css" />
+
+<div class="container-fluid px-4 mt-4">
+    <div class="row justify-content-center">
+        <div class="col-xl-10 col-lg-11">
+            <h2 class="text-primary mb-5 text-center display-4 fw-bold">📚 Tra cứu sách</h2>
+
+            <!-- 🔍 Form tìm kiếm -->
+            <div class="card shadow-lg mb-5 rounded-4 search-container">
+                <div class="card-body p-4">
+                    <form method="get" id="searchForm" class="row g-4 align-items-end justify-content-center">
+                        <div class="col-xl-3 col-lg-4 col-md-6">
+                            <label class="form-label fw-semibold">🔍 Chọn tiêu chí tìm kiếm:</label>
+                            <select id="searchType" class="form-select shadow-sm" name="searchType">
+                                <option value="">-- Chọn tiêu chí --</option>
+                                <option value="title">Tên sách</option>
+                                <option value="author">Tác giả</option>
+                                <option value="category">Thể loại</option>
+                                <option value="date">Năm xuất bản</option>
+                            </select>
+                        </div>
+                        <div id="searchInputContainer" class="col-xl-5 col-lg-6 col-md-6"></div>
+                        <div class="col-xl-2 col-lg-2 col-md-12 text-center">
+                            <button type="submit" class="btn btn-primary px-4 py-2 fw-bold shadow-lg">🔎 Tìm kiếm</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- ✅ Hiển thị danh sách tag -->
+            <div class="card shadow-lg mb-5 rounded-4 search-container">
+                <div class="card-body p-4">
+                    <label class="form-label fw-semibold d-block mb-3">📌 Chọn tag:</label>
+                    <div class="d-flex flex-wrap gap-3 justify-content-center">
+                        @foreach (var tag in Model.Tags)
+                        {
+                            <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill tag-button px-4"
+                                data-tag="@tag.Name">
+                                @tag.Name
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- 📚 Danh sách sách -->
+            <div class="row justify-content-center" id="bookList"></div>
+            
+            <!-- 📑 Phân trang -->
+            <nav id="paginationNav" aria-label="Page navigation" class="my-5">
+                <ul class="pagination justify-content-center"></ul>
+            </nav>
+            
+            <div style="height: 80px;"></div>
+        </div>
+    </div>
+</div>
+
+
+
+@section Scripts {
+
+    <script>
+
+        const pageSize = 6;
+
+        let currentBooks = [];
+
+
+
+        function loadBooks(page = 1, extraParams = {}) {
+
+            const form = document.getElementById("searchForm");
+
+            const searchParams = new URLSearchParams(new FormData(form));
+
+            searchParams.set("page", page);
+
+            searchParams.set("pageSize", pageSize);
+
+
+
+            for (const key in extraParams) {
+
+                searchParams.set(key, extraParams[key]);
+
+            }
+
+
+
+            fetch(`/Index?handler=AjaxSearch&${searchParams.toString()}`)
+
+                .then(res => res.json())
+
+                .then(data => {
+
+                    console.log(data);
+
+                    currentBooks = data.books;
+
+                    renderBooks(data.books);
+
+                    renderPagination(data.totalPages, page);
+
+                });
+
+        }
+
+
+
+        function renderBooks(books) {
+
+            document.getElementById("paginationNav").style.display = "block";
+
+            const container = document.getElementById("bookList");
+
+            container.innerHTML = "";
+
+
+
+            books.forEach((book, index) => {
+
+                const imageSrc = book.imageBase64 && book.imageBase64 !== ""
+
+                    ? book.imageBase64
+
+                    : "/images/default-book.jpg";
+
+                const tags = book.tags?.length ? book.tags.join(", ") : "Không có";
+
+
+
+                container.innerHTML += `
+                    <div class="col-xl-4 col-lg-6 col-md-6 col-sm-12 mb-4 book-card">
+                        <div class="card h-100 shadow-lg rounded-4">
+                            <div class="position-relative overflow-hidden rounded-top-4">
+                                <img src="${imageSrc}" class="card-img-top" alt="${book.title}" style="height: 280px; object-fit: cover;" />
+                                <div class="position-absolute top-0 start-0 w-100 h-100 bg-dark bg-opacity-25 d-flex align-items-center justify-content-center opacity-0 transition-opacity" style="transition: all 0.3s ease;">
+                                    <button class="btn btn-light btn-lg rounded-circle" onclick="showDetail(${index})" style="width: 60px; height: 60px;">
+                                        <i class="fas fa-eye"></i> 👁️
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body p-4 d-flex flex-column">
+                                <h5 class="card-title fw-bold text-primary mb-3">${book.title}</h5>
+                                <div class="flex-grow-1">
+                                    <p class="mb-2"><strong class="text-secondary">Tác giả:</strong> <span class="text-dark">${book.author.name}</span></p>
+                                    <p class="mb-2"><strong class="text-secondary">Thể loại:</strong> <span class="text-dark">${book.category.name}</span></p>
+                                    <p class="mb-2"><strong class="text-secondary">Năm xuất bản:</strong> <span class="text-dark">${book.publicationYear}</span></p>
+                                    <p class="mb-3"><strong class="text-secondary">Tags:</strong> <span class="text-muted">${tags}</span></p>
+                                </div>
+                                <button class="btn btn-outline-primary btn-sm fw-semibold rounded-pill mt-auto" onclick="showDetail(${index})">📖 Xem chi tiết</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+            });
+
+        }
+
+
+
+        function showDetail(index) {
+
+            const book = currentBooks[index];
+
+            const imageSrc = book.imageBase64 && book.imageBase64 !== ""
+
+                ? book.imageBase64
+
+                : "/images/default-book.jpg";
+
+            const tags = book.tags?.length ? book.tags.join(", ") : "Không có";
+
+
+
+            document.getElementById("paginationNav").style.display = "none";
+
+
+
+            const container = document.getElementById("bookList");
+
+            container.innerHTML = `
+                <div class="col-12">
+                    <div class="row align-items-center justify-content-center g-4">
+                        <div class="col-xl-5 col-lg-6 col-md-12 text-center">
+                            <div class="position-relative">
+                                <img src="${imageSrc}" class="img-fluid rounded-4 shadow-lg" alt="${book.title}" style="max-height: 500px; object-fit: cover;" />
+                                <div class="position-absolute top-0 start-0 w-100 h-100 bg-gradient rounded-4" style="background: linear-gradient(45deg, rgba(52, 152, 219, 0.1), rgba(155, 89, 182, 0.1));"></div>
+                            </div>
+                        </div>
+                        <div class="col-xl-7 col-lg-6 col-md-12">
+                            <div class="bg-white bg-opacity-95 p-5 rounded-4 shadow-lg">
+                                <h2 class="text-primary fw-bold mb-4">${book.title}</h2>
+                                <div class="row g-3">
+                                    <div class="col-sm-6">
+                                        <p class="mb-2"><strong class="text-secondary">👤 Tác giả:</strong><br><span class="text-dark fs-6">${book.author.name}</span></p>
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <p class="mb-2"><strong class="text-secondary">📚 Thể loại:</strong><br><span class="text-dark fs-6">${book.category.name}</span></p>
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <p class="mb-2"><strong class="text-secondary">📅 Năm xuất bản:</strong><br><span class="text-dark fs-6">${book.publicationYear}</span></p>
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <p class="mb-2"><strong class="text-secondary">🏢 NXB:</strong><br><span class="text-dark fs-6">${book.publisher.name}</span></p>
+                                    </div>
+                                    <div class="col-12">
+                                        <p class="mb-3"><strong class="text-secondary">🏷️ Tags:</strong><br><span class="text-muted">${tags}</span></p>
+                                    </div>
+                                    <div class="col-12">
+                                        <p class="mb-3"><strong class="text-secondary">📝 Mô tả:</strong><br><span class="text-dark">${book.description}</span></p>
+                                    </div>
+                                    <div class="col-12">
+                                        <p class="mb-4"><strong class="text-secondary">📖 Tóm tắt:</strong><br><span class="text-dark">${book.abstract}</span></p>
+                                    </div>
+                                </div>
+                                <div class="d-flex flex-wrap gap-3 justify-content-center">
+                                    <button class="btn btn-success px-4 py-2 fw-bold shadow-lg rounded-pill" onclick="handleAddFavorite(${book.bookId})">
+                                        ❤️ Thêm vào yêu thích
+                                    </button>
+                                    <button class="btn btn-secondary px-4 py-2 fw-bold shadow-lg rounded-pill" onclick="renderBooks(currentBooks)">
+                                        🔙 Quay lại danh sách
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+        }
+
+
+
+        window.addEventListener("load", () => {
+
+            const returnBookId = sessionStorage.getItem("returnBookId");
+
+            if (returnBookId) {
+
+                sessionStorage.removeItem("returnBookId");
+
+                loadBooks(1);
+
+                setTimeout(() => {
+
+                    const index = currentBooks.findIndex(b => b.bookId == returnBookId);
+
+                    if (index !== -1) showDetail(index);
+
+                }, 500);
+
+            } else {
+
+                loadBooks(1);
+
+            }
+
+        });
+
+
+
+        function renderPagination(totalPages, currentPage) {
+
+            const pagination = document.querySelector("#paginationNav ul");
+
+            pagination.innerHTML = "";
+
+            for (let i = 1; i <= totalPages; i++) {
+
+                pagination.innerHTML += `
+
+                            <li class="page-item ${i === currentPage ? "active" : ""}">
+
+                                <a class="page-link" href="#" onclick="loadBooks(${i}); return false;">${i}</a>
+
+                            </li>
+
+                        `;
+
+            }
+
+        }
+
+
+
+        document.getElementById("searchForm").addEventListener("submit", function (e) {
+
+            e.preventDefault();
+
+            loadBooks(1);
+
+        });
+
+
+
+        document.querySelectorAll(".tag-button").forEach(btn => {
+
+            btn.addEventListener("click", function () {
+
+                const tag = this.getAttribute("data-tag");
+
+                loadBooks(1, { tag });
+
+            });
+
+        });
+
+
+
+        const searchType = document.getElementById("searchType");
+
+        const inputContainer = document.getElementById("searchInputContainer");
+
+
+
+        searchType.addEventListener("change", function () {
+
+            const type = this.value;
+
+            inputContainer.innerHTML = "";
+
+
+
+            if (type === "title") {
+
+                inputContainer.innerHTML = `<label class="form-label">Tên sách</label><input type="text" name="title" class="form-control" />`;
+
+            } else if (type === "author") {
+
+                inputContainer.innerHTML = `<label class="form-label">Tác giả</label><input type="text" name="author" class="form-control" />`;
+
+            } else if (type === "category") {
+
+                inputContainer.innerHTML = `<label class="form-label">Thể loại</label><select name="categoryId" class="form-select">
+
+                            <option value="">-- Chọn thể loại --</option>
+
+                            @foreach (var category in Model.Categories)
+
+                            {
+
+                                            <option value="@category.CategoryId">@category.Name</option>
+
+                            }
+
+                        </select>`;
+
+            } else if (type === "date") {
+
+                inputContainer.innerHTML = `<label class="form-label">Năm xuất bản</label><input type="number" name="year" class="form-control" min="1900" max="2100" />`;
+
+            }
+
+        });
+
+
+
+
+
+function checkLogin() {
+
+   console.log('=== CHECKING LOGIN ===');
+
+   // SỬA URL: Không có /Index prefix vì đã ở trang Index
+
+   return fetch('/?handler=CheckLogin', {
+
+       method: 'GET',
+
+       credentials: 'include',
+
+       headers: {
+
+           'Content-Type': 'application/json',
+
+           'X-Requested-With': 'XMLHttpRequest',
+
+           'Accept': 'application/json' // Quan trọng: Yêu cầu JSON response
+
+       }
+
+   })
+
+   .then(res => {
+
+       console.log('CheckLogin response status:', res.status);
+
+       console.log('CheckLogin response headers:', [...res.headers.entries()]);
+
+       if (!res.ok) {
+
+           throw new Error(`HTTP error! status: ${res.status}`);
+
+       }
+
+       // Kiểm tra Content-Type
+
+       const contentType = res.headers.get('content-type');
+
+       if (!contentType || !contentType.includes('application/json')) {
+
+           throw new Error(`Expected JSON but got: ${contentType}`);
+
+       }
+
+       return res.json(); // Trực tiếp parse JSON thay vì text
+
+   })
+
+   .then(data => {
+
+       console.log('CheckLogin parsed data:', data);
+
+       return data.isLoggedIn;
+
+   })
+
+   .catch(error => {
+
+       console.error('CheckLogin error:', error);
+
+       return false;
+
+   });
+
+}
+
+function handleAddFavorite(bookId) {
+
+   console.log('=== ADDING FAVORITE ===');
+
+   console.log('BookId:', bookId);
+
+   checkLogin().then(isLoggedIn => {
+
+       console.log('Login check result:', isLoggedIn);
+
+       if (!isLoggedIn) {
+
+           alert("Bạn cần đăng nhập để thêm vào yêu thích!");
+
+           return;
+
+       }
+
+       console.log('Proceeding with add favorite...');
+
+       const formData = new FormData();
+
+       formData.append('bookId', bookId);
+
+       // SỬA URL: Không có /Index prefix
+
+       fetch('/?handler=AddFavorite', {
+
+           method: 'POST',
+
+           body: formData,
+
+           credentials: 'include',
+
+           headers: {
+
+               'X-Requested-With': 'XMLHttpRequest',
+
+               'Accept': 'application/json'
+
+           }
+
+       })
+
+       .then(async response => {
+
+           console.log('AddFavorite response status:', response.status);
+
+           const contentType = response.headers.get('content-type');
+
+           console.log('AddFavorite content-type:', contentType);
+
+           if (!contentType || !contentType.includes('application/json')) {
+
+               const text = await response.text();
+
+               console.error('Expected JSON but got HTML:', text.substring(0, 200) + '...');
+
+               throw new Error('Server returned HTML instead of JSON');
+
+           }
+
+           const data = await response.json();
+
+           console.log('AddFavorite parsed data:', data);
+
+           if (!response.ok) {
+
+               alert("Có lỗi xảy ra: " + (data.message || `Lỗi HTTP ${response.status}`));
+
+               return;
+
+           }
+
+           if (data.success) {
+
+               alert(data.message || "Đã thêm vào danh sách yêu thích!");
+
+           } else {
+
+               alert(data.message || "Thêm vào yêu thích thất bại.");
+
+           }
+
+       })
+
+       .catch(error => {
+
+           console.error("AddFavorite error:", error);
+
+           if (error.message.includes('HTML instead of JSON')) {
+
+               alert("Lỗi server: Vui lòng kiểm tra đăng nhập và thử lại.");
+
+           } else {
+
+               alert("Có lỗi mạng khi thêm vào yêu thích.");
+
+           }
+
+       });
+
+   }).catch(error => {
+
+       console.error("CheckLogin promise error:", error);
+
+       alert("Không thể kiểm tra trạng thái đăng nhập.");
+
+   });
+
+}
+
+// Test function để debug
+
+function testAjaxHandlers() {
+
+   console.log('=== TESTING AJAX HANDLERS ===');
+
+   // Test CheckLogin direct
+
+   fetch('/?handler=CheckLogin', {
+
+       method: 'GET',
+
+       credentials: 'include',
+
+       headers: {
+
+           'X-Requested-With': 'XMLHttpRequest',
+
+           'Accept': 'application/json'
+
+       }
+
+   })
+
+   .then(res => {
+
+       console.log('Direct CheckLogin status:', res.status);
+
+       console.log('Direct CheckLogin headers:', [...res.headers.entries()]);
+
+       return res.text();
+
+   })
+
+   .then(text => {
+
+       console.log('Direct CheckLogin response:', text);
+
+       try {
+
+           const data = JSON.parse(text);
+
+           console.log('Direct CheckLogin JSON:', data);
+
+       } catch (e) {
+
+           console.error('Direct CheckLogin not JSON:', e);
+
+       }
+
+   });
+
+}
+
+// Auto run test when page loads
+
+window.addEventListener('load', function() {
+
+   console.log('Page loaded, testing AJAX handlers...');
+
+   setTimeout(testAjaxHandlers, 2000);
+
+});
+
+
+
+// Debug function để kiểm tra session
+
+
+
+function debugSession() {
+
+
+
+    checkLogin().then(result => {
+
+
+
+        console.log('=== SESSION DEBUG ===');
+
+
+
+        console.log('Login result:', result);
+
+
+
+        // Kiểm tra cookies
+
+
+
+        console.log('All cookies:', document.cookie);
+
+
+
+        // Test AJAX endpoint trực tiếp
+
+
+
+        fetch('/Index?handler=CheckLoginAsync', {
+
+
+
+            method: 'GET',
+
+
+
+            credentials: 'include',
+
+
+
+            headers: {
+
+
+
+                'Content-Type': 'application/json',
+
+
+
+                'X-Requested-With': 'XMLHttpRequest'
+
+
+
+            }
+
+
+
+        }).then(res => res.json()).then(data => {
+
+
+
+            console.log('Direct CheckLogin call result:', data);
+
+
+
+        });
+
+
+
+    });
+
+
+
+}
+
+
+
+// Gọi debug khi trang load
+
+
+
+window.addEventListener('load', () => {
+
+
+
+    console.log('Page loaded, running session debug...');
+
+
+
+    setTimeout(debugSession, 1000);
+
+
+
+});
+
+
+
+
+
+    </script>
+
+}
