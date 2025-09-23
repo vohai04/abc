@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("RazoPages")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3ebabd51047dbbd4d676f0169d57c911757c6b99")]
 [assembly: System.Reflection.AssemblyProductAttribute("RazoPages")]
 [assembly: System.Reflection.AssemblyTitleAttribute("RazoPages")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

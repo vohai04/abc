@@ -1,0 +1,250 @@
+@page
+@model BookInfoFinder.Pages.FavoritesModel
+@{
+    ViewData["Title"] = "Danh sách yêu thích";
+}
+
+<h2 class="text-primary mb-4">📚 Danh sách yêu thích</h2>
+
+@if (!string.IsNullOrEmpty(Model.UserName))
+{
+    <p>Xin chào <strong>@Model.UserName</strong> 👋! Đây là danh sách các sách bạn đã yêu thích:</p>
+    <div id="favoriteBooksContainer">
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Đang tải...</span>
+            </div>
+        </div>
+    </div>
+    <nav id="paginationNav" aria-label="Page navigation" class="my-4" style="display: none;">
+        <ul class="pagination justify-content-center"></ul>
+    </nav>
+}
+else
+{
+    <div class="alert alert-warning">
+        ⚠️ Bạn cần <a href="/Login">đăng nhập</a> để xem danh sách yêu thích.
+    </div>
+}
+
+@section Scripts {
+<script>
+const pageSize = 6;
+
+function getCurrentPageFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const page = parseInt(params.get("page"));
+    return (!isNaN(page) && page > 0) ? page : 1;
+}
+
+function updateUrlPage(page) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('page', page);
+    window.history.replaceState({}, '', url); // ✅ FIX: Dùng replaceState thay vì pushState
+}
+
+// ✅ FIX: Cải thiện error handling và loading state
+function loadFavoriteBooks(page = 1) {
+    const container = document.getElementById("favoriteBooksContainer");
+    
+    // Show loading
+    container.innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Đang tải...</span>
+            </div>
+            <p class="mt-2">Đang tải trang ${page}...</p>
+        </div>
+    `;
+
+    // ✅ FIX: Thêm cache busting và timeout
+    const timestamp = Date.now();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+    fetch(`/Favorites?handler=AjaxFavorites&page=${page}&pageSize=${pageSize}&_=${timestamp}`, {
+        signal: controller.signal,
+        headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+        }
+    })
+    .then(res => {
+        clearTimeout(timeoutId);
+        if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+    })
+    .then(data => {
+        console.log(`📚 Page ${page} data:`, data); // ✅ Debug log
+        if (data.success === false) {
+            throw new Error(data.message || 'Unknown error');
+        }
+        renderFavoriteBooks(data.books, data.totalPages, page);
+        updateUrlPage(page);
+    })
+    .catch(error => {
+        clearTimeout(timeoutId);
+        console.error('❌ Error loading favorites:', error);
+        container.innerHTML = `
+            <div class="alert alert-danger">
+                <h5>❌ Không thể tải danh sách yêu thích</h5>
+                <p>${error.message}</p>
+                <button class="btn btn-primary" onclick="loadFavoriteBooks(${page})">🔄 Thử lại</button>
+            </div>
+        `;
+    });
+}
+
+function renderFavoriteBooks(books, totalPages, currentPage) {
+    const container = document.getElementById("favoriteBooksContainer");
+    const paginationNav = document.getElementById("paginationNav");
+    let html = "";
+
+    if (!books || books.length === 0) {
+        html += '<div class="alert alert-info">📌 Chưa có sách nào trong danh sách yêu thích.</div>';
+        container.innerHTML = html;
+        paginationNav.style.display = "none";
+        return;
+    }
+
+    html += '<div class="row">';
+    books.forEach(book => {
+        const imageSrc = book.imageBase64 && book.imageBase64 !== "" ? book.imageBase64 : "/images/default-book.jpg";
+        const tags = book.tags?.length ? book.tags.join(", ") : "Không có";
+        html += `
+            <div class="col-lg-4 col-md-6 col-sm-12 mb-4 book-card">
+                <div class="card h-100 shadow-sm rounded-4">
+                    <img src="${imageSrc}" class="card-img-top" alt="${book.title}" style="height: 250px; object-fit: cover;">
+                    <div class="card-body d-flex flex-column">
+                        <h6 class="card-title text-primary fw-bold">${book.title}</h6>
+                        <p class="card-text"><strong>Tác giả:</strong> ${book.author.name}</p>
+                        <p class="card-text"><strong>Thể loại:</strong> ${book.category.name}</p>
+                        <p class="card-text"><strong>Tags:</strong> <span class="text-muted">${tags}</span></p>
+                        <div class="mt-auto d-flex gap-2">
+                            <a href="/Details?id=${book.bookId}" class="btn btn-primary btn-sm flex-fill">📖 Chi tiết</a>
+                            <form class="remove-form" data-bookid="${book.bookId}" style="display: inline;">
+                                <button type="submit" class="btn btn-danger btn-sm">🗑️</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    html += "</div>";
+
+    container.innerHTML = html;
+
+    // ✅ FIX: Cải thiện pagination rendering
+    renderPagination(totalPages, currentPage);
+
+    // ✅ FIX: Event delegation cho remove forms
+    attachRemoveEvents();
+}
+
+// ✅ FIX: Tách riêng function render pagination
+function renderPagination(totalPages, currentPage) {
+    const paginationNav = document.getElementById("paginationNav");
+    const pagination = paginationNav.querySelector("ul");
+    
+    pagination.innerHTML = "";
+    
+    if (totalPages <= 1) {
+        paginationNav.style.display = "none";
+        return;
+    }
+
+    paginationNav.style.display = "block";
+
+    // Previous button
+    const prevDisabled = currentPage <= 1;
+    pagination.innerHTML += `
+        <li class="page-item${prevDisabled ? " disabled" : ""}">
+            <a class="page-link page-btn" data-page="${currentPage - 1}" href="#" ${prevDisabled ? 'tabindex="-1"' : ''}>
+                Trước
+            </a>
+        </li>
+    `;
+
+    // Page numbers with smart range
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    
+    if (endPage - startPage + 1 < maxVisiblePages) {
+        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    if (startPage > 1) {
+        pagination.innerHTML += `<li class="page-item"><a class="page-link page-btn" data-page="1" href="#">1</a></li>`;
+        if (startPage > 2) {
+            pagination.innerHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        const isActive = i === currentPage;
+        pagination.innerHTML += `
+            <li class="page-item${isActive ? " active" : ""}">
+                <a class="page-link page-btn" data-page="${i}" href="#">${i}</a>
+            </li>
+        `;
+    }
+
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            pagination.innerHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+        pagination.innerHTML += `<li class="page-item"><a class="page-link page-btn" data-page="${totalPages}" href="#">${totalPages}</a></li>`;
+    }
+
+    // Next button
+    const nextDisabled = currentPage >= totalPages;
+    pagination.innerHTML += `
+        <li class="page-item${nextDisabled ? " disabled" : ""}">
+            <a class="page-link page-btn" data-page="${currentPage + 1}" href="#" ${nextDisabled ? 'tabindex="-1"' : ''}>
+                Sau
+            </a>
+        </li>
+    `;
+
+    // Attach pagination events
+    pagination.querySelectorAll('.page-btn').forEach(btn => {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            const page = parseInt(this.getAttribute('data-page'));
+            if (!isNaN(page) && page >= 1 && page <= totalPages && page !== currentPage) {
+                loadFavoriteBooks(page);
+            }
+        });
+    });
+}
+
+// ✅ FIX: Event delegation cho remove buttons
+function attachRemoveEvents() {
+    const container = document.getElementById("favoriteBooksContainer");
+    container.querySelectorAll('.remove-form').forEach(form => {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            if (!confirm('Bạn có chắc muốn xóa khỏi yêu thích?')) return;
+            
+            const bookId = parseInt(this.getAttribute('data-bookid'));
+            const button = this.querySelector('button');
+            
+            // Disable button during request
+            button.disabled = true;
+            button.innerHTML = '⏳';
+            
+            fetch('/Favorites?handler=RemoveFavorite', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'RequestVerificationToken': document.querySelector('input[name="__RequestVerificationToken"]')?.value || ''
+                },
+                body: JSON.stringify({ BookId: bookId })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if
