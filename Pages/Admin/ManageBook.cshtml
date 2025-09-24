@@ -1,0 +1,301 @@
+@page
+@model BookInfoFinder.Pages.Admin.ManageBookModel
+@{
+    ViewData["Title"] = "Quản lý sách";
+}
+
+<h2 class="text-primary">📚 Quản lý sách</h2>
+
+<!-- ✅ DEBUG INFO -->
+<div class="alert alert-info mb-3">
+    <strong>🔍 Debug Info:</strong> 
+    Trang @Model.Page/@Model.TotalPages | 
+    Tổng: @Model.TotalBooks sách | 
+    Search: "@Model.Search" | 
+    Category: @Model.Category | 
+    Hiển thị: @Model.Books.Count sách
+</div>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-6">
+        <input type="text" name="search" class="form-control" placeholder="Tìm theo tên sách..."
+            value="@Model.Search" />
+    </div>
+    <div class="col-md-4">
+        <select name="category" class="form-select">
+            <option value="">--Lọc theo thể loại--</option>
+            @foreach (var cat in Model.Categories)
+            {
+                <option value="@cat.CategoryId" selected="@(Model.Category == cat.CategoryId)">@cat.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-2 d-flex gap-1">
+        <button type="submit" class="btn btn-outline-primary">🔍 Lọc</button>
+        <a href="/Admin/ManageBook" class="btn btn-outline-secondary" title="Reset">🔄</a>
+    </div>
+</form>
+
+<div class="row mb-3">
+    <div class="col-md-6">
+        <form method="post" asp-page-handler="ExportCsv" class="d-inline">
+            <input type="hidden" name="Search" value="@Model.Search" />
+            <input type="hidden" name="Category" value="@Model.Category" />
+            <button type="submit" class="btn btn-outline-success">📤 Xuất CSV (@Model.TotalBooks sách)</button>
+        </form>
+    </div>
+    <div class="col-md-6 text-end">
+        <a asp-page="./AddBook" class="btn btn-success">+ Thêm sách mới</a>
+    </div>
+</div>
+
+<hr />
+
+@if (Model.Books.Any())
+{
+    <div class="table-responsive">
+        <table class="table table-bordered table-striped mt-4">
+            <thead class="table-dark">
+                <tr>
+                    <th style="width: 80px;">Ảnh</th>
+                    <th>Tên sách</th>
+                    <th>ISBN</th>
+                    <th>Tác giả</th>
+                    <th>Thể loại</th>
+                    <th>NXB</th>
+                    <th>Năm XB</th>
+                    <th>Mô tả</th>
+                    <th>Tóm tắt</th>
+                    <th>Tag</th>
+                    <th style="width: 120px;">Thao tác</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var book in Model.Books)
+                {
+                    <tr>
+                        <td>
+                            @if (!string.IsNullOrWhiteSpace(book.ImageBase64))
+                            {
+                                <img src="@book.ImageBase64" alt="Ảnh sách" width="70" height="70" style="object-fit:cover;" />
+                            }
+                            else
+                            {
+                                <span class="text-muted">Không có ảnh</span>
+                            }
+                        </td>
+                        <td><strong>@book.Title</strong><br><small class="text-muted">ID: @book.BookId</small></td>
+                        <td><code>@book.ISBN</code></td>
+                        <td>@book.Author?.Name</td>
+                        <td><span class="badge bg-primary">@book.Category?.Name</span></td>
+                        <td>@book.Publisher?.Name</td>
+                        <td>@(book.PublicationDate != default ? book.PublicationDate.Year.ToString() : "N/A")</td>
+                        <td>@(book.Description?.Length > 50 ? book.Description.Substring(0, 50) + "..." : book.Description)</td>
+                        <td>@(book.Abstract?.Length > 50 ? book.Abstract.Substring(0, 50) + "..." : book.Abstract)</td>
+                        <td>
+                            @if (book.BookTags?.Any() == true)
+                            {
+                                @foreach (var bt in book.BookTags)
+                                {
+                                    <span class="badge bg-info text-dark me-1">@bt.Tag?.Name</span>
+                                }
+                            }
+                            else
+                            {
+                                <span class="text-muted">Không có tag</span>
+                            }
+                        </td>
+                        <td>
+                            <div class="btn-group-vertical gap-1">
+                                <a asp-page="/Admin/UpdateBook" 
+                                   asp-route-id="@book.BookId" 
+                                   asp-route-search="@Model.Search"
+                                   asp-route-category="@Model.Category" 
+                                   asp-route-page="@Model.Page" 
+                                   class="btn btn-sm btn-warning"
+                                   title="Sửa sách này">✏️</a>
+
+                                <a href="/BookDetail/@book.BookId" 
+                                   class="btn btn-sm btn-primary" 
+                                   title="Xem chi tiết sách">👁️</a>
+
+                                <button type="button" 
+                                        class="btn btn-sm btn-danger" 
+                                        title="Xóa sách này" 
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#confirmDeleteModal" 
+                                        data-id="@book.BookId"
+                                        data-title="@book.Title">🗑️</button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+else
+{
+    <div class="alert alert-warning">
+        <h5>📭 Không tìm thấy sách nào</h5>
+        @if (!string.IsNullOrEmpty(Model.Search) || Model.Category.HasValue)
+        {
+            <p>Không có sách nào phù hợp với bộ lọc hiện tại.</p>
+            <a href="/Admin/ManageBook" class="btn btn-primary">🔄 Reset bộ lọc</a>
+        }
+        else
+        {
+            <p>Chưa có sách nào trong hệ thống.</p>
+            <a asp-page="./AddBook" class="btn btn-success">+ Thêm sách đầu tiên</a>
+        }
+    </div>
+}
+
+@if (Model.TotalPages > 1)
+{
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            <!-- Previous -->
+            <li class="page-item @(Model.Page == 1 ? "disabled" : "")">
+                <a class="page-link" 
+                   asp-route-page="@(Model.Page - 1)" 
+                   asp-route-search="@Model.Search"
+                   asp-route-category="@Model.Category" 
+                   tabindex="@(Model.Page == 1 ? "-1" : "")">« Trước</a>
+            </li>
+
+            <!-- Page Numbers with Smart Range -->
+            @{
+                int startPage = Math.Max(1, Model.Page - 2);
+                int endPage = Math.Min(Model.TotalPages, Model.Page + 2);
+                
+                // Adjust range if we're near the beginning or end
+                if (endPage - startPage < 4)
+                {
+                    if (startPage == 1)
+                        endPage = Math.Min(Model.TotalPages, startPage + 4);
+                    else if (endPage == Model.TotalPages)
+                        startPage = Math.Max(1, endPage - 4);
+                }
+            }
+
+            <!-- First page if not in range -->
+            @if (startPage > 1)
+            {
+                <li class="page-item">
+                    <a class="page-link" 
+                       asp-route-page="1" 
+                       asp-route-search="@Model.Search"
+                       asp-route-category="@Model.Category">1</a>
+                </li>
+                @if (startPage > 2)
+                {
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                }
+            }
+
+            <!-- Page range -->
+            @for (int i = startPage; i <= endPage; i++)
+            {
+                <li class="page-item @(i == Model.Page ? "active" : "")">
+                    <a class="page-link" 
+                       asp-route-page="@i" 
+                       asp-route-search="@Model.Search"
+                       asp-route-category="@Model.Category">@i</a>
+                </li>
+            }
+
+            <!-- Last page if not in range -->
+            @if (endPage < Model.TotalPages)
+            {
+                @if (endPage < Model.TotalPages - 1)
+                {
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                }
+                <li class="page-item">
+                    <a class="page-link" 
+                       asp-route-page="@Model.TotalPages" 
+                       asp-route-search="@Model.Search"
+                       asp-route-category="@Model.Category">@Model.TotalPages</a>
+                </li>
+            }
+
+            <!-- Next -->
+            <li class="page-item @(Model.Page == Model.TotalPages ? "disabled" : "")">
+                <a class="page-link" 
+                   asp-route-page="@(Model.Page + 1)" 
+                   asp-route-search="@Model.Search"
+                   asp-route-category="@Model.Category">Sau »</a>
+            </li>
+        </ul>
+    </nav>
+
+    <!-- ✅ DEBUG: Page info -->
+    <div class="text-center mt-2">
+        <small class="text-muted">
+            Hiển thị @((Model.Page - 1) * Model.PageSize + 1) - @(Math.Min(Model.Page * Model.PageSize, Model.TotalBooks)) 
+            trong tổng số @Model.TotalBooks sách
+        </small>
+    </div>
+}
+
+<!-- Modal xác nhận xóa -->
+<div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-labelledby="confirmDeleteLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="post" asp-page-handler="Delete">
+            <input type="hidden" name="id" id="deleteBookId" />
+            <input type="hidden" name="search" value="@Model.Search" />
+            <input type="hidden" name="category" value="@Model.Category" />
+            <input type="hidden" name="page" value="@Model.Page" />
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="confirmDeleteLabel">🗑️ Xác nhận xóa</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Bạn có chắc chắn muốn xóa sách <strong id="deleteBookTitle"></strong> không?</p>
+                    <div class="alert alert-warning">
+                        <small>⚠️ Hành động này không thể hoàn tác!</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn btn-danger">🗑️ Xóa</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        // ✅ FIX: Modal xác nhận xóa với title
+        const deleteModal = document.getElementById('confirmDeleteModal');
+        if (deleteModal) {
+            deleteModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                const bookId = button.getAttribute('data-id');
+                const bookTitle = button.getAttribute('data-title');
+                
+                const hiddenInput = document.getElementById('deleteBookId');
+                const titleSpan = document.getElementById('deleteBookTitle');
+                
+                if (hiddenInput) hiddenInput.value = bookId;
+                if (titleSpan) titleSpan.textContent = bookTitle || 'sách này';
+                
+                console.log(`🗑️ Delete modal opened for Book ID: ${bookId}, Title: ${bookTitle}`);
+            });
+        }
+
+        // ✅ DEBUG: Log current page info
+        console.log(`📚 ManageBook Debug:`, {
+            page: @Model.Page,
+            totalPages: @Model.TotalPages,
+            totalBooks: @Model.TotalBooks,
+            search: '@Model.Search',
+            category: @(Model.Category?.ToString() ?? "null"),
+            booksCount: @Model.Books.Count
+        });
+    </script>
+}
